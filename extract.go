@@ -17,7 +17,7 @@ func listTests(elemList interface{}, strList []string) {
 	fmt.Println("Nr. of tests:", len(testArr))
 
 	for i, val := range testArr {
-		fmt.Printf("Index: %d, Value: %#v\n", i, val)
+		fmt.Printf("Tests Index: %d, Value: %#v\n", i, val)
 		testObj, ok := val.([]interface{})
 		if !ok {
 			fmt.Println("Unexpected type")
@@ -31,6 +31,28 @@ func listTests(elemList interface{}, strList []string) {
 	}
 }
 
+// func listMessage(elemList interface{}, strList []string) {
+// 	msgArr, ok := elemList.([]interface{})
+// 	if !ok {
+// 		fmt.Println("Unexpected type")
+// 		return
+// 	}
+// 	fmt.Println("Nr. of messages:", len(msgArr))
+
+// 	for i, val := range msgArr {
+// 		fmt.Printf("Messages Index: %d, Value: %#v\n", i, val)
+// 		msgObj, ok := val.([]interface{})
+// 		if !ok {
+// 			fmt.Println("Unexpected type")
+// 			return
+// 		}
+
+// 		fmt.Println("Message: ", strList[int(msgObj[2].(float64))])
+// 		//timestamp is index 0
+// 		//index 1 is log levelin LEVELS array
+// 	}
+// }
+
 func listKeyWords(elemList interface{}, strList []string) {
 	keyWordArr, ok := elemList.([]interface{})
 	if !ok {
@@ -40,16 +62,41 @@ func listKeyWords(elemList interface{}, strList []string) {
 	fmt.Println("Nr. of keywords:", len(keyWordArr))
 
 	for i, val := range keyWordArr {
-		fmt.Printf("Index: %d, Value: %#v\n", i, val)
+		fmt.Printf("Keywords Index: %d, Value: %#v\n", i, val)
 		keyWordObj, ok := val.([]interface{})
 		if !ok {
 			fmt.Println("Unexpected type")
 			return
 		}
 
-		fmt.Println("Name: ", strList[int(keyWordObj[1].(float64))])
+		if len(keyWordObj) < 5 {
+			//this is a message, not a keyword
+			fmt.Println("Message: ", strList[int(keyWordObj[2].(float64))])
+			continue
+		}
+
 		fmt.Println("Libname: ", strList[int(keyWordObj[2].(float64))])
+		fmt.Println("Name: ", strList[int(keyWordObj[1].(float64))])
 		fmt.Println("Args: ", strList[int(keyWordObj[5].(float64))])
+		if arr, ok := keyWordObj[9].([]interface{}); ok {
+			listKeyWords(arr, strList)
+			// if len(arr) > 0 {
+			// 	fmt.Printf("arr: %#v\n", arr)
+			// 	fmt.Printf("arr[0]: %#v\n", arr[0])
+			// 	if first, ok := arr[0].(float64); ok {
+			// 		fmt.Println("First element is a float64:", first)
+			// 		listMessage(keyWordObj[9], strList)
+			// 		continue
+			// 	} else {
+			// 		fmt.Println("First element is not a float64")
+			// 		listKeyWords(keyWordObj[9], strList)
+			// 	}
+			// } else {
+			// 	fmt.Println("Regular keyword list")
+			// 	listKeyWords(keyWordObj[9], strList)
+			// }
+			// fmt.Println("Next child is empty, abandoning...")
+		}
 	}
 }
 
