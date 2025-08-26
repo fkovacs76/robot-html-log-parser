@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 )
 
@@ -51,14 +53,66 @@ func listKeyWords(elemList interface{}, strList []string) {
 	}
 }
 
+// extractSuiteData extracts the JSON data from window.output["suite"] assignment
+func extractSuiteData(htmlContent string) (string, error) {
+	re := regexp.MustCompile(`window\.output\["suite"\]\s*=\s*(\[.*?\]);`)
+	matches := re.FindStringSubmatch(htmlContent)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not find window.output[\"suite\"] assignment")
+	}
+	return matches[1], nil
+}
+
+// extractStringsData extracts the JSON data from window.output["strings"] concat assignment
+func extractStringsData(htmlContent string) (string, error) {
+	re := regexp.MustCompile(`window\.output\["strings"\]\.concat\((\[.*?\])\);`)
+	matches := re.FindStringSubmatch(htmlContent)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("could not find window.output[\"strings\"] concat assignment")
+	}
+	return matches[1], nil
+}
+
+// readHTMLFile reads the HTML file and extracts the required JSON data
+func readHTMLFile(filename string) (string, string, error) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return "", "", fmt.Errorf("error reading file: %v", err)
+	}
+
+	htmlContent := string(content)
+
+	suiteData, err := extractSuiteData(htmlContent)
+	if err != nil {
+		return "", "", err
+	}
+
+	stringsData, err := extractStringsData(htmlContent)
+	if err != nil {
+		return "", "", err
+	}
+
+	return suiteData, stringsData, nil
+}
+
 func main() {
-	data := `[1,2,3,0,[],[1,0,16],[],[[4,0,5,[],[1,14,1],[[0,6,7,0,8,9,0,0,[1,15,0],[]]]],[10,0,0,[],[1,15,1],[[0,6,7,0,8,11,0,0,[1,15,0],[]],[0,12,7,0,13,14,0,0,[1,16,0],[[16,2,14]]]]]],[[1,15,0,0,0,16,0,0,[1,14,1],[[0,6,7,0,8,17,0,0,[1,14,0],[]]]]],[2,2,0,0]]`
-	output_strings := `["*","*Hello","*/home/fkovacs/robot/hello.robot","*hello.robot","*My Hello","*<p>Here is the placeholder for doc\x3c/p>","*Log To Console","*BuiltIn","*<p>Logs the given message to the console.\x3c/p>","*Hello world","*Another TC","*Started the next","*Log","*<p>Logs the given message with the given level.\x3c/p>","*This is logging as well","*My Log","*Wow","*${text}"]`
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run extract.go <html_file>")
+		os.Exit(1)
+	}
+
+	htmlFile := os.Args[1]
+
+	data, output_strings, err := readHTMLFile(htmlFile)
+	if err != nil {
+		fmt.Println("Error reading HTML file:", err)
+		os.Exit(1)
+	}
 
 	cleaned := strings.ReplaceAll(output_strings, `\x3c`, "<")
 
 	var result interface{}
-	err := json.Unmarshal([]byte(data), &result)
+	err = json.Unmarshal([]byte(data), &result)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
