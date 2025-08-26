@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+const INDENT = 4
+
+func returnIndent(level int) string {
+	return strings.Repeat(" ", level*INDENT)
+}
+
 func listTests(elemList interface{}, strList []string) {
 	testArr, ok := elemList.([]interface{})
 	if !ok {
@@ -27,7 +33,7 @@ func listTests(elemList interface{}, strList []string) {
 		fmt.Println("Name: ", strList[int(testObj[0].(float64))])
 		fmt.Println("Doc: ", strList[int(testObj[2].(float64))])
 
-		listKeyWords(testObj[5], strList)
+		listKeyWords(testObj[5], strList, 0)
 	}
 }
 
@@ -53,7 +59,7 @@ func listTests(elemList interface{}, strList []string) {
 // 	}
 // }
 
-func listKeyWords(elemList interface{}, strList []string) {
+func listKeyWords(elemList interface{}, strList []string, index int) {
 	keyWordArr, ok := elemList.([]interface{})
 	if !ok {
 		fmt.Println("Unexpected type")
@@ -71,15 +77,15 @@ func listKeyWords(elemList interface{}, strList []string) {
 
 		if len(keyWordObj) < 5 {
 			//this is a message, not a keyword
-			fmt.Println("Message: ", strList[int(keyWordObj[2].(float64))])
+			fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[2].(float64))])
 			continue
 		}
 
-		fmt.Println("Libname: ", strList[int(keyWordObj[2].(float64))])
-		fmt.Println("Name: ", strList[int(keyWordObj[1].(float64))])
-		fmt.Println("Args: ", strList[int(keyWordObj[5].(float64))])
+		fmt.Println(returnIndent(index), "Libname: ", strList[int(keyWordObj[2].(float64))])
+		fmt.Println(returnIndent(index), "Name: ", strList[int(keyWordObj[1].(float64))])
+		fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))])
 		if arr, ok := keyWordObj[9].([]interface{}); ok {
-			listKeyWords(arr, strList)
+			listKeyWords(arr, strList, index+1)
 			// if len(arr) > 0 {
 			// 	fmt.Printf("arr: %#v\n", arr)
 			// 	fmt.Printf("arr[0]: %#v\n", arr[0])
@@ -193,5 +199,8 @@ func main() {
 	fmt.Printf("%#v\n", arr[9])
 
 	listTests(arr[7], outputArr)
+
+	fmt.Println("Suite Keywords:")
+	listKeyWords(arr[8], outputArr, 0)
 
 }
