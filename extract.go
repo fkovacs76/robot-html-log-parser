@@ -14,6 +14,35 @@ func returnIndent(level int) string {
 	return strings.Repeat(" ", level*INDENT)
 }
 
+func listSuites(elemList interface{}, strList []string) {
+	suitesArr, ok := elemList.([]interface{})
+	if !ok {
+		fmt.Println("Unexpected type")
+		return
+	}
+	fmt.Println("Nr. of suites:", len(suitesArr))
+
+	for _, val := range suitesArr {
+		//fmt.Printf("Tests Index: %d, Value: %#v\n", i, val)
+		suitesObj, ok := val.([]interface{})
+		if !ok {
+			fmt.Println("Unexpected type")
+			return
+		}
+
+		fmt.Println("Suite name: ", strList[int(suitesObj[0].(float64))])
+		fmt.Println("Suite doc: ", strList[int(suitesObj[3].(float64))])
+		fmt.Println("Suite source: ", strList[int(suitesObj[1].(float64))])
+		fmt.Println("Suite relative source: ", strList[int(suitesObj[2].(float64))])
+
+		// suite can have other suites and tests
+		listSuites(suitesObj[6], strList)
+		listTests(suitesObj[7], strList)
+		listKeyWords(suitesObj[8], strList, 0)
+
+	}
+}
+
 func listTests(elemList interface{}, strList []string) {
 	testArr, ok := elemList.([]interface{})
 	if !ok {
@@ -30,34 +59,12 @@ func listTests(elemList interface{}, strList []string) {
 			return
 		}
 
-		fmt.Println("Name: ", strList[int(testObj[0].(float64))])
+		fmt.Println("Test name: ", strList[int(testObj[0].(float64))])
 		fmt.Println("Doc: ", strList[int(testObj[2].(float64))])
 
 		listKeyWords(testObj[5], strList, 0)
 	}
 }
-
-// func listMessage(elemList interface{}, strList []string) {
-// 	msgArr, ok := elemList.([]interface{})
-// 	if !ok {
-// 		fmt.Println("Unexpected type")
-// 		return
-// 	}
-// 	fmt.Println("Nr. of messages:", len(msgArr))
-
-// 	for i, val := range msgArr {
-// 		fmt.Printf("Messages Index: %d, Value: %#v\n", i, val)
-// 		msgObj, ok := val.([]interface{})
-// 		if !ok {
-// 			fmt.Println("Unexpected type")
-// 			return
-// 		}
-
-// 		fmt.Println("Message: ", strList[int(msgObj[2].(float64))])
-// 		//timestamp is index 0
-// 		//index 1 is log levelin LEVELS array
-// 	}
-// }
 
 func listKeyWords(elemList interface{}, strList []string, index int) {
 	keyWordArr, ok := elemList.([]interface{})
@@ -87,22 +94,6 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 		fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))])
 		if arr, ok := keyWordObj[9].([]interface{}); ok {
 			listKeyWords(arr, strList, index+1)
-			// if len(arr) > 0 {
-			// 	fmt.Printf("arr: %#v\n", arr)
-			// 	fmt.Printf("arr[0]: %#v\n", arr[0])
-			// 	if first, ok := arr[0].(float64); ok {
-			// 		fmt.Println("First element is a float64:", first)
-			// 		listMessage(keyWordObj[9], strList)
-			// 		continue
-			// 	} else {
-			// 		fmt.Println("First element is not a float64")
-			// 		listKeyWords(keyWordObj[9], strList)
-			// 	}
-			// } else {
-			// 	fmt.Println("Regular keyword list")
-			// 	listKeyWords(keyWordObj[9], strList)
-			// }
-			// fmt.Println("Next child is empty, abandoning...")
 		}
 	}
 }
@@ -151,7 +142,6 @@ func resolveVariableReferences(content string, allVariables map[string]string, r
 			fullVarName := match[1] // e.g., "window.sPart0" (without delimiter)
 			delimiter := match[2]   // the delimiter: ',' or ']'
 			fullMatch := match[0]   // complete match including delimiter
-			fmt.Printf("fullVarName: %s\n", fullVarName)
 
 			// Skip if already resolved
 			if resolvedContent, exists := resolved[fullVarName]; exists {
@@ -217,41 +207,6 @@ func main() {
 
 	htmlFile := os.Args[1]
 
-	// remove this later
-
-	// content, err := os.ReadFile(htmlFile)
-	// if err != nil {
-	// 	fmt.Printf("error reading file: %v", err)
-	// }
-
-	// htmlContent := string(content)
-
-	// suiteData, err := extractSuiteData(htmlContent)
-	// if err != nil {
-	// 	fmt.Printf("error reading file: %v", err)
-	// }
-
-	// file, err := os.Create("output.txt")
-	// if err != nil {
-	// 	fmt.Println("Error creating file:", err)
-	// 	return
-	// }
-	// // Defer the file's closure until the main function returns.
-	// // This ensures the file is always closed, even if an error occurs.
-	// defer file.Close()
-
-	// // Write the string to the file.
-	// n, err := file.WriteString(suiteData)
-	// if err != nil {
-	// 	fmt.Println("Error writing to file:", err)
-	// 	return
-	// }
-
-	// fmt.Printf("Successfully wrote %d bytes to output.txt\n", n)
-	// os.Exit(1)
-
-	// end remove this later
-
 	data, output_strings, err := readHTMLFile(htmlFile)
 	if err != nil {
 		fmt.Println("Error reading HTML file:", err)
@@ -274,29 +229,15 @@ func main() {
 		return
 	}
 
-	//fmt.Printf("%#v\n", outputArr)
-
-	//fmt.Printf("%#v\n", result)
-
 	arr, ok := result.([]interface{})
 	if !ok {
 		fmt.Println("Unexpected type")
 		return
 	}
 
-	// fmt.Printf("%#v\n", arr[5])
-	// fmt.Println("Suites")
-	// fmt.Printf("%#v\n", arr[6])
-	// fmt.Println("Tests")
-	// fmt.Printf("%#v\n", arr[7])
-	// fmt.Println("Keywords")
-	// fmt.Printf("%#v\n", arr[8])
-	// fmt.Println("Don't know")
-	// fmt.Printf("%#v\n", arr[9])
+	//listSuites(arr, outputArr)
 
+	listSuites(arr[6], outputArr)
 	listTests(arr[7], outputArr)
-
-	fmt.Println("Suite Keywords:")
 	listKeyWords(arr[8], outputArr, 0)
-
 }
