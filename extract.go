@@ -22,8 +22,8 @@ func listTests(elemList interface{}, strList []string) {
 	}
 	fmt.Println("Nr. of tests:", len(testArr))
 
-	for i, val := range testArr {
-		fmt.Printf("Tests Index: %d, Value: %#v\n", i, val)
+	for _, val := range testArr {
+		//fmt.Printf("Tests Index: %d, Value: %#v\n", i, val)
 		testObj, ok := val.([]interface{})
 		if !ok {
 			fmt.Println("Unexpected type")
@@ -67,8 +67,8 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 	}
 	fmt.Println("Nr. of keywords:", len(keyWordArr))
 
-	for i, val := range keyWordArr {
-		fmt.Printf("Keywords Index: %d, Value: %#v\n", i, val)
+	for _, val := range keyWordArr {
+		//fmt.Printf("Keywords Index: %d, Value: %#v\n", i, val)
 		keyWordObj, ok := val.([]interface{})
 		if !ok {
 			fmt.Println("Unexpected type")
@@ -78,6 +78,7 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 		if len(keyWordObj) < 5 {
 			//this is a message, not a keyword
 			fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[2].(float64))])
+			fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[3].(float64))])
 			continue
 		}
 
@@ -107,13 +108,43 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 }
 
 // extractSuiteData extracts the JSON data from window.output["suite"] assignment
+// and handles variable references like window.sPart0, window.sPart1
 func extractSuiteData(htmlContent string) (string, error) {
+	// First, extract the main suite assignment
 	re := regexp.MustCompile(`window\.output\["suite"\]\s*=\s*(\[.*?\]);`)
 	matches := re.FindStringSubmatch(htmlContent)
 	if len(matches) < 2 {
 		return "", fmt.Errorf("could not find window.output[\"suite\"] assignment")
 	}
-	return matches[1], nil
+	suiteContent := matches[1]
+
+	// Find all window.sPart variables referenced in the suite
+	variablePattern := regexp.MustCompile(`window\.(sPart\d+)`)
+	variableMatches := variablePattern.FindAllStringSubmatch(suiteContent, -1)
+
+	// Extract the actual content of each variable
+	variableMap := make(map[string]string)
+	for _, match := range variableMatches {
+		if len(match) >= 2 {
+			varName := match[1] // e.g., "sPart0"
+			fullVarName := "window." + varName
+
+			// Extract the variable definition
+			varPattern := regexp.MustCompile(`window\.` + regexp.QuoteMeta(varName) + `\s*=\s*(\[.*?\]);`)
+			varMatches := varPattern.FindStringSubmatch(htmlContent)
+			if len(varMatches) >= 2 {
+				variableMap[fullVarName] = varMatches[1]
+			}
+		}
+	}
+
+	// Replace variable references with their actual content
+	result := suiteContent
+	for varRef, varContent := range variableMap {
+		result = strings.ReplaceAll(result, varRef, varContent)
+	}
+
+	return result, nil
 }
 
 // extractStringsData extracts the JSON data from window.output["strings"] concat assignment
@@ -178,9 +209,9 @@ func main() {
 		return
 	}
 
-	fmt.Printf("%#v\n", outputArr)
+	//fmt.Printf("%#v\n", outputArr)
 
-	fmt.Printf("%#v\n", result)
+	//fmt.Printf("%#v\n", result)
 
 	arr, ok := result.([]interface{})
 	if !ok {
@@ -188,15 +219,15 @@ func main() {
 		return
 	}
 
-	fmt.Printf("%#v\n", arr[5])
-	fmt.Println("Suites")
-	fmt.Printf("%#v\n", arr[6])
-	fmt.Println("Tests")
-	fmt.Printf("%#v\n", arr[7])
-	fmt.Println("Keywords")
-	fmt.Printf("%#v\n", arr[8])
-	fmt.Println("Don't know")
-	fmt.Printf("%#v\n", arr[9])
+	// fmt.Printf("%#v\n", arr[5])
+	// fmt.Println("Suites")
+	// fmt.Printf("%#v\n", arr[6])
+	// fmt.Println("Tests")
+	// fmt.Printf("%#v\n", arr[7])
+	// fmt.Println("Keywords")
+	// fmt.Printf("%#v\n", arr[8])
+	// fmt.Println("Don't know")
+	// fmt.Printf("%#v\n", arr[9])
 
 	listTests(arr[7], outputArr)
 
