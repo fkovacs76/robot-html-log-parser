@@ -108,7 +108,7 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 }
 
 // extractSuiteData extracts the JSON data from window.output["suite"] assignment
-// and handles variable references like window.sPart0, window.sPart1
+// and handles nested variable references like window.sPart0, window.sPart1, etc.
 func extractSuiteData(htmlContent string) (string, error) {
 	// First, extract the main suite assignment
 	re := regexp.MustCompile(`window\.output\["suite"\]\s*=\s*(\[.*?\]);`)
@@ -118,33 +118,63 @@ func extractSuiteData(htmlContent string) (string, error) {
 	}
 	suiteContent := matches[1]
 
-	// Find all window.sPart variables referenced in the suite
-	variablePattern := regexp.MustCompile(`window\.(sPart\d+)`)
-	variableMatches := variablePattern.FindAllStringSubmatch(suiteContent, -1)
+	// Extract all variable definitions from HTML
+	allVariables := make(map[string]string)
+	variablePattern := regexp.MustCompile(`window\.(sPart\d+)\s*=\s*(\[.*?\]);`)
+	varMatches := variablePattern.FindAllStringSubmatch(htmlContent, -1)
 
-	// Extract the actual content of each variable
-	variableMap := make(map[string]string)
-	for _, match := range variableMatches {
-		if len(match) >= 2 {
-			varName := match[1] // e.g., "sPart0"
-			fullVarName := "window." + varName
+	for _, match := range varMatches {
+		if len(match) >= 3 {
+			varName := "window." + match[1] // e.g., "window.sPart0"
+			varContent := match[2]          // the actual array content
+			allVariables[varName] = varContent
+		}
+	}
 
-			// Extract the variable definition
-			varPattern := regexp.MustCompile(`window\.` + regexp.QuoteMeta(varName) + `\s*=\s*(\[.*?\]);`)
-			varMatches := varPattern.FindStringSubmatch(htmlContent)
-			if len(varMatches) >= 2 {
-				variableMap[fullVarName] = varMatches[1]
+	// Recursively resolve all variable references
+	resolved := make(map[string]string)
+	result := resolveVariableReferences(suiteContent, allVariables, resolved)
+
+	return result, nil
+}
+
+// resolveVariableReferences recursively resolves nested variable references
+func resolveVariableReferences(content string, allVariables map[string]string, resolved map[string]string) string {
+	// Find all variable references in current content
+	// Match complete variable name followed by delimiter to avoid partial matches like sPart1 vs sPart10
+	variableRefPattern := regexp.MustCompile(`(window\.sPart\d+)([,\]])`)
+	refMatches := variableRefPattern.FindAllStringSubmatch(content, -1)
+
+	result := content
+	for _, match := range refMatches {
+		if len(match) >= 3 {
+			fullVarName := match[1] // e.g., "window.sPart0" (without delimiter)
+			delimiter := match[2]   // the delimiter: ',' or ']'
+			fullMatch := match[0]   // complete match including delimiter
+			fmt.Printf("fullVarName: %s\n", fullVarName)
+
+			// Skip if already resolved
+			if resolvedContent, exists := resolved[fullVarName]; exists {
+				// Replace the exact match (variable + delimiter) with (resolved content + delimiter)
+				result = strings.ReplaceAll(result, fullMatch, resolvedContent+delimiter)
+				continue
+			}
+
+			// Get the variable definition
+			if varContent, exists := allVariables[fullVarName]; exists {
+				// Recursively resolve any variables within this variable's content
+				resolvedVarContent := resolveVariableReferences(varContent, allVariables, resolved)
+
+				// Cache the resolved content
+				resolved[fullVarName] = resolvedVarContent
+
+				// Replace the exact match (variable + delimiter) with (resolved content + delimiter)
+				result = strings.ReplaceAll(result, fullMatch, resolvedVarContent+delimiter)
 			}
 		}
 	}
 
-	// Replace variable references with their actual content
-	result := suiteContent
-	for varRef, varContent := range variableMap {
-		result = strings.ReplaceAll(result, varRef, varContent)
-	}
-
-	return result, nil
+	return result
 }
 
 // extractStringsData extracts the JSON data from window.output["strings"] concat assignment
@@ -186,6 +216,41 @@ func main() {
 	}
 
 	htmlFile := os.Args[1]
+
+	// remove this later
+
+	// content, err := os.ReadFile(htmlFile)
+	// if err != nil {
+	// 	fmt.Printf("error reading file: %v", err)
+	// }
+
+	// htmlContent := string(content)
+
+	// suiteData, err := extractSuiteData(htmlContent)
+	// if err != nil {
+	// 	fmt.Printf("error reading file: %v", err)
+	// }
+
+	// file, err := os.Create("output.txt")
+	// if err != nil {
+	// 	fmt.Println("Error creating file:", err)
+	// 	return
+	// }
+	// // Defer the file's closure until the main function returns.
+	// // This ensures the file is always closed, even if an error occurs.
+	// defer file.Close()
+
+	// // Write the string to the file.
+	// n, err := file.WriteString(suiteData)
+	// if err != nil {
+	// 	fmt.Println("Error writing to file:", err)
+	// 	return
+	// }
+
+	// fmt.Printf("Successfully wrote %d bytes to output.txt\n", n)
+	// os.Exit(1)
+
+	// end remove this later
 
 	data, output_strings, err := readHTMLFile(htmlFile)
 	if err != nil {
