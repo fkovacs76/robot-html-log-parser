@@ -167,14 +167,43 @@ func resolveVariableReferences(content string, allVariables map[string]string, r
 	return result
 }
 
-// extractStringsData extracts the JSON data from window.output["strings"] concat assignment
+// extractStringsData extracts and concatenates all JSON data from multiple window.output["strings"] concat assignments
 func extractStringsData(htmlContent string) (string, error) {
-	re := regexp.MustCompile(`window\.output\["strings"\]\.concat\((\[.*?\])\);`)
-	matches := re.FindStringSubmatch(htmlContent)
-	if len(matches) < 2 {
-		return "", fmt.Errorf("could not find window.output[\"strings\"] concat assignment")
+	re := regexp.MustCompile(`window\.output\["strings"\].*?\.concat\((\[.*?\])\);`)
+	matches := re.FindAllStringSubmatch(htmlContent, -1)
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("could not find any window.output[\"strings\"] concat assignments")
 	}
-	return matches[1], nil
+
+	// Collect all string arrays from the concatenations
+	var allArrays []string
+	for _, match := range matches {
+		if len(match) >= 2 {
+			allArrays = append(allArrays, match[1])
+		}
+	}
+
+	// Parse each array and merge them into one final array
+	var finalStrings []string
+
+	for _, arrayStr := range allArrays {
+		var tempArray []string
+		cleaned := strings.ReplaceAll(arrayStr, `\x3c`, "<")
+		err := json.Unmarshal([]byte(cleaned), &tempArray)
+		if err != nil {
+			return "", fmt.Errorf("error parsing string array: %v", err)
+		}
+		finalStrings = append(finalStrings, tempArray...)
+	}
+
+	// Convert back to JSON string
+	finalJSON, err := json.Marshal(finalStrings)
+	if err != nil {
+		return "", fmt.Errorf("error creating final JSON: %v", err)
+	}
+
+	return string(finalJSON), nil
 }
 
 // readHTMLFile reads the HTML file and extracts the required JSON data
@@ -213,7 +242,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cleaned := strings.ReplaceAll(output_strings, `\x3c`, "<")
+	//cleaned := strings.ReplaceAll(output_strings, `\x3c`, "<")
 
 	var result interface{}
 	err = json.Unmarshal([]byte(data), &result)
@@ -223,7 +252,7 @@ func main() {
 	}
 
 	var outputArr []string
-	err = json.Unmarshal([]byte(cleaned), &outputArr)
+	err = json.Unmarshal([]byte(output_strings), &outputArr)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
