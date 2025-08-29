@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const INDENT = 4
+
+var baseMillis int64
 
 func returnIndent(level int) string {
 	return strings.Repeat(" ", level*INDENT)
@@ -69,31 +73,61 @@ func listTests(elemList interface{}, strList []string) {
 func listKeyWords(elemList interface{}, strList []string, index int) {
 	keyWordArr, ok := elemList.([]interface{})
 	if !ok {
-		fmt.Println("Unexpected type")
+		fmt.Println("Unexpected type, not an array")
 		return
 	}
-	fmt.Println("Nr. of keywords:", len(keyWordArr))
+	//fmt.Println("Nr. of keywords:", len(keyWordArr))
 
 	for _, val := range keyWordArr {
 		//fmt.Printf("Keywords Index: %d, Value: %#v\n", i, val)
 		keyWordObj, ok := val.([]interface{})
 		if !ok {
-			fmt.Println("Unexpected type")
+			fmt.Println("Unexpected type in listKeyWords")
 			return
 		}
 
 		if len(keyWordObj) < 5 {
 			//this is a message, not a keyword
-			fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[2].(float64))])
-			fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[3].(float64))])
+			if strList[int(keyWordObj[3].(float64))][0] == '*' {
+				fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[3].(float64))][1:])
+			}
+			//else it's zipped message, TBD later
 			continue
 		}
 
-		fmt.Println(returnIndent(index), "Libname: ", strList[int(keyWordObj[2].(float64))])
-		fmt.Println(returnIndent(index), "Name: ", strList[int(keyWordObj[1].(float64))])
-		fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))])
+		fmt.Println(returnIndent(index), "Name: ", strList[int(keyWordObj[2].(float64))][1:]+"."+strList[int(keyWordObj[1].(float64))][1:])
+		//fmt.Println(returnIndent(index), "Name: ", strList[int(keyWordObj[1].(float64))])
+		fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))][1:])
+
+		//fmt.Println(returnIndent(index), "Time: ", strList[int(keyWordObj[8].(float64))][1:])
+		if times, ok := keyWordObj[8].([]interface{}); ok {
+			startMillis := int64(times[1].(float64))
+			elapsedMillis := int64(times[2].(float64))
+
+			// Convert start time from baseMillis epoch to actual timestamp
+			actualStartMillis := baseMillis + startMillis
+			startTime := time.Unix(actualStartMillis/1000, (actualStartMillis%1000)*1000000)
+
+			// Calculate end time by adding elapsed time
+			actualEndMillis := actualStartMillis + elapsedMillis
+			endTime := time.Unix(actualEndMillis/1000, (actualEndMillis%1000)*1000000)
+
+			fmt.Printf("%s Start: %s End: %s Elapsed: %dms)\n",
+				returnIndent(index),
+				startTime.Format("2006-01-02 15:04:05.000"),
+				endTime.Format("2006-01-02 15:04:05.000"),
+				elapsedMillis)
+			//fmt.Printf("%sEnd:   %s (elapsed: %dms)\n", returnIndent(index), endTime.Format("2006-01-02 15:04:05.000"), elapsedMillis)
+		} else {
+			fmt.Println("Unexpected type in listKeyWords - times")
+			return
+		}
+
 		if arr, ok := keyWordObj[9].([]interface{}); ok {
 			listKeyWords(arr, strList, index+1)
+		} else {
+			fmt.Println("Unexpected type moving to next keyword, not an array")
+			return
 		}
 	}
 }
@@ -206,6 +240,23 @@ func extractStringsData(htmlContent string) (string, error) {
 	return string(finalJSON), nil
 }
 
+// extractBaseMillis extracts the baseMillis value from window.output["baseMillis"] assignment
+func extractBaseMillis(htmlContent string) error {
+	re := regexp.MustCompile(`window\.output\["baseMillis"\]\s*=\s*(\d+);`)
+	matches := re.FindStringSubmatch(htmlContent)
+	if len(matches) < 2 {
+		return fmt.Errorf("could not find window.output[\"baseMillis\"] assignment")
+	}
+
+	value, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		return fmt.Errorf("error parsing baseMillis value: %v", err)
+	}
+
+	baseMillis = value
+	return nil
+}
+
 // readHTMLFile reads the HTML file and extracts the required JSON data
 func readHTMLFile(filename string) (string, string, error) {
 	content, err := os.ReadFile(filename)
@@ -214,6 +265,12 @@ func readHTMLFile(filename string) (string, string, error) {
 	}
 
 	htmlContent := string(content)
+
+	// Extract baseMillis value and store in package variable
+	err = extractBaseMillis(htmlContent)
+	if err != nil {
+		return "", "", err
+	}
 
 	suiteData, err := extractSuiteData(htmlContent)
 	if err != nil {
@@ -265,6 +322,8 @@ func main() {
 	}
 
 	//listSuites(arr, outputArr)
+
+	fmt.Printf("BaseMillis: %d\n", baseMillis)
 
 	listSuites(arr[6], outputArr)
 	listTests(arr[7], outputArr)
