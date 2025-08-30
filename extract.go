@@ -112,7 +112,7 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 			actualEndMillis := actualStartMillis + elapsedMillis
 			endTime := time.Unix(actualEndMillis/1000, (actualEndMillis%1000)*1000000)
 
-			fmt.Printf("%s Start: %s End: %s Elapsed: %dms)\n",
+			fmt.Printf("%s Start: %s End: %s Elapsed: %dms\n",
 				returnIndent(index),
 				startTime.Format("2006-01-02 15:04:05.000"),
 				endTime.Format("2006-01-02 15:04:05.000"),
@@ -228,6 +228,20 @@ func extractStringsData(htmlContent string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("error parsing string array: %v", err)
 		}
+
+		// Convert HTML entities and normalize line endings for each string
+		for i, str := range tempArray {
+			// Convert HTML entities
+			str = strings.ReplaceAll(str, "&quot;", "\"")
+			str = strings.ReplaceAll(str, "&amp;", "&")
+			str = strings.ReplaceAll(str, "&lt;", "<")
+			str = strings.ReplaceAll(str, "&gt;", ">")
+			// Normalize line endings
+			str = strings.ReplaceAll(str, "\r\n", "")
+			str = strings.ReplaceAll(str, "\n", "")
+			tempArray[i] = str
+		}
+
 		finalStrings = append(finalStrings, tempArray...)
 	}
 
