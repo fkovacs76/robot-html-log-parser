@@ -13,6 +13,9 @@ import (
 const INDENT = 4
 
 var baseMillis int64
+var levels []string
+var statuses []string
+var keywordTypes []string
 
 func returnIndent(level int) string {
 	return strings.Repeat(" ", level*INDENT)
@@ -89,15 +92,12 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 		if len(keyWordObj) < 5 {
 			//this is a message, not a keyword
 			if strList[int(keyWordObj[3].(float64))][0] == '*' {
-				fmt.Println(returnIndent(index), "Message: ", strList[int(keyWordObj[3].(float64))][1:])
+				level := levels[int(keyWordObj[2].(float64))]
+				fmt.Println(returnIndent(index), "Message: ", level, " ", strList[int(keyWordObj[3].(float64))][1:])
 			}
 			//else it's zipped message, TBD later
 			continue
 		}
-
-		fmt.Println(returnIndent(index), "Name: ", strList[int(keyWordObj[2].(float64))][1:]+"."+strList[int(keyWordObj[1].(float64))][1:])
-		//fmt.Println(returnIndent(index), "Name: ", strList[int(keyWordObj[1].(float64))])
-		fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))][1:])
 
 		//fmt.Println(returnIndent(index), "Time: ", strList[int(keyWordObj[8].(float64))][1:])
 		if times, ok := keyWordObj[8].([]interface{}); ok {
@@ -111,6 +111,12 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 			// Calculate end time by adding elapsed time
 			actualEndMillis := actualStartMillis + elapsedMillis
 			endTime := time.Unix(actualEndMillis/1000, (actualEndMillis%1000)*1000000)
+
+			status := statuses[int64(times[0].(float64))]
+			keywordType := keywordTypes[int(keyWordObj[0].(float64))]
+
+			fmt.Println(returnIndent(index), status, " ", keywordType, strList[int(keyWordObj[2].(float64))][1:]+"."+strList[int(keyWordObj[1].(float64))][1:])
+			fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))][1:])
 
 			fmt.Printf("%s Start: %s End: %s Elapsed: %dms\n",
 				returnIndent(index),
@@ -254,6 +260,48 @@ func extractStringsData(htmlContent string) (string, error) {
 	return string(finalJSON), nil
 }
 
+// extractJSArrays extracts JavaScript array definitions (LEVELS, STATUSES, KEYWORD_TYPES) from the HTML
+func extractJSArrays(htmlContent string) error {
+	// Extract LEVELS array
+	levelsRe := regexp.MustCompile(`var LEVELS = \[(.*?)\];`)
+	if matches := levelsRe.FindStringSubmatch(htmlContent); len(matches) >= 2 {
+		arrayContent := matches[1]
+		// Parse the array content - remove quotes and split by comma
+		arrayContent = strings.ReplaceAll(arrayContent, "'", "")
+		arrayContent = strings.ReplaceAll(arrayContent, "\"", "")
+		arrayContent = strings.ReplaceAll(arrayContent, " ", "")
+		if arrayContent != "" {
+			levels = strings.Split(arrayContent, ",")
+		}
+	}
+
+	// Extract STATUSES array
+	statusesRe := regexp.MustCompile(`var STATUSES = \[(.*?)\];`)
+	if matches := statusesRe.FindStringSubmatch(htmlContent); len(matches) >= 2 {
+		arrayContent := matches[1]
+		arrayContent = strings.ReplaceAll(arrayContent, "'", "")
+		arrayContent = strings.ReplaceAll(arrayContent, "\"", "")
+		arrayContent = strings.ReplaceAll(arrayContent, " ", "")
+		if arrayContent != "" {
+			statuses = strings.Split(arrayContent, ",")
+		}
+	}
+
+	// Extract KEYWORD_TYPES array (spans multiple lines)
+	keywordTypesRe := regexp.MustCompile(`var KEYWORD_TYPES = \[(.*?)\];`)
+	if matches := keywordTypesRe.FindStringSubmatch(strings.ReplaceAll(htmlContent, "\n", " ")); len(matches) >= 2 {
+		arrayContent := matches[1]
+		arrayContent = strings.ReplaceAll(arrayContent, "'", "")
+		arrayContent = strings.ReplaceAll(arrayContent, "\"", "")
+		arrayContent = strings.ReplaceAll(arrayContent, " ", "")
+		if arrayContent != "" {
+			keywordTypes = strings.Split(arrayContent, ",")
+		}
+	}
+
+	return nil
+}
+
 // extractBaseMillis extracts the baseMillis value from window.output["baseMillis"] assignment
 func extractBaseMillis(htmlContent string) error {
 	re := regexp.MustCompile(`window\.output\["baseMillis"\]\s*=\s*(\d+);`)
@@ -279,6 +327,12 @@ func readHTMLFile(filename string) (string, string, error) {
 	}
 
 	htmlContent := string(content)
+
+	// Extract JavaScript arrays and store in package variables
+	err = extractJSArrays(htmlContent)
+	if err != nil {
+		return "", "", err
+	}
 
 	// Extract baseMillis value and store in package variable
 	err = extractBaseMillis(htmlContent)
@@ -338,6 +392,9 @@ func main() {
 	//listSuites(arr, outputArr)
 
 	fmt.Printf("BaseMillis: %d\n", baseMillis)
+	fmt.Printf("LEVELS: %v\n", levels)
+	fmt.Printf("STATUSES: %v\n", statuses)
+	fmt.Printf("KEYWORD_TYPES: %v\n", keywordTypes)
 
 	listSuites(arr[6], outputArr)
 	listTests(arr[7], outputArr)
