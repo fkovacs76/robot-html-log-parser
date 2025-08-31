@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +18,17 @@ var baseMillis int64
 var levels []string
 var statuses []string
 var keywordTypes []string
+
+// KeywordProfile stores profiling data for a keyword
+type KeywordProfile struct {
+	Name           string
+	Invocations    int
+	TotalElapsedMs int64
+}
+
+// Package-level variables for profiling
+var profilingEnabled bool
+var keywordProfiles map[string]*KeywordProfile
 
 func returnIndent(level int) string {
 	return strings.Repeat(" ", level*INDENT)
@@ -115,7 +128,10 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 			status := statuses[int64(times[0].(float64))]
 			keywordType := keywordTypes[int(keyWordObj[0].(float64))]
 
-			fmt.Println(returnIndent(index), status, " ", keywordType, strList[int(keyWordObj[2].(float64))][1:]+"."+strList[int(keyWordObj[1].(float64))][1:])
+			// Extract keyword name as shown in line 118
+			keywordName := strList[int(keyWordObj[2].(float64))][1:] + "." + strList[int(keyWordObj[1].(float64))][1:]
+
+			fmt.Println(returnIndent(index), status, " ", keywordType, keywordName)
 			fmt.Println(returnIndent(index), "Args: ", strList[int(keyWordObj[5].(float64))][1:])
 
 			fmt.Printf("%s Start: %s End: %s Elapsed: %dms\n",
@@ -123,6 +139,20 @@ func listKeyWords(elemList interface{}, strList []string, index int) {
 				startTime.Format("2006-01-02 15:04:05.000"),
 				endTime.Format("2006-01-02 15:04:05.000"),
 				elapsedMillis)
+
+			// Collect profiling data if enabled and keyword type is 'KEYWORD'
+			if profilingEnabled && keywordType == "KEYWORD" {
+				if profile, exists := keywordProfiles[keywordName]; exists {
+					profile.Invocations++
+					profile.TotalElapsedMs += elapsedMillis
+				} else {
+					keywordProfiles[keywordName] = &KeywordProfile{
+						Name:           keywordName,
+						Invocations:    1,
+						TotalElapsedMs: elapsedMillis,
+					}
+				}
+			}
 			//fmt.Printf("%sEnd:   %s (elapsed: %dms)\n", returnIndent(index), endTime.Format("2006-01-02 15:04:05.000"), elapsedMillis)
 		} else {
 			fmt.Println("Unexpected type in listKeyWords - times")
@@ -167,6 +197,46 @@ func extractSuiteData(htmlContent string) (string, error) {
 	result := resolveVariableReferences(suiteContent, allVariables, resolved)
 
 	return result, nil
+}
+
+// displayProfilingResults displays the profiling results table with top 100 keywords
+func displayProfilingResults() {
+	if !profilingEnabled || len(keywordProfiles) == 0 {
+		return
+	}
+
+	// Convert map to slice for sorting
+	profiles := make([]*KeywordProfile, 0, len(keywordProfiles))
+	for _, profile := range keywordProfiles {
+		profiles = append(profiles, profile)
+	}
+
+	// Sort by total elapsed time in descending order
+	sort.Slice(profiles, func(i, j int) bool {
+		return profiles[i].TotalElapsedMs > profiles[j].TotalElapsedMs
+	})
+
+	// Limit to top 100
+	if len(profiles) > 100 {
+		profiles = profiles[:100]
+	}
+
+	// Display table header
+	fmt.Println("\n" + strings.Repeat("=", 100))
+	fmt.Println("PROFILING RESULTS - TOP KEYWORDS BY ELAPSED TIME")
+	fmt.Println(strings.Repeat("=", 100))
+	fmt.Printf("%-70s %12s %15s\n", "Keyword Name", "Invocations", "Elapsed Time (s)")
+	fmt.Println(strings.Repeat("-", 100))
+
+	// Display results
+	for _, profile := range profiles {
+		elapsedSeconds := float64(profile.TotalElapsedMs) / 1000.0
+		fmt.Printf("%-70s %12d %15.3f\n", profile.Name, profile.Invocations, elapsedSeconds)
+	}
+
+	fmt.Println(strings.Repeat("=", 100))
+	fmt.Printf("Total keywords analyzed: %d\n", len(keywordProfiles))
+	fmt.Printf("Showing top %d keywords\n", len(profiles))
 }
 
 // resolveVariableReferences recursively resolves nested variable references
@@ -354,12 +424,29 @@ func readHTMLFile(filename string) (string, string, error) {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run extract.go <html_file>")
+	// Define command line flags
+	profilingFlag := flag.Bool("p", false, "enable profiling")
+	profilingFlagLong := flag.Bool("profiling", false, "enable profiling")
+
+	// Parse command line flags
+	flag.Parse()
+
+	// Set profiling enabled if either short or long flag is provided
+	profilingEnabled = *profilingFlag || *profilingFlagLong
+
+	// Initialize profiling map if enabled
+	if profilingEnabled {
+		keywordProfiles = make(map[string]*KeywordProfile)
+	}
+
+	// Get the HTML file from remaining arguments
+	args := flag.Args()
+	if len(args) < 1 {
+		fmt.Println("Usage: go run extract.go [-p|--profiling] <html_file>")
 		os.Exit(1)
 	}
 
-	htmlFile := os.Args[1]
+	htmlFile := args[0]
 
 	data, output_strings, err := readHTMLFile(htmlFile)
 	if err != nil {
@@ -399,4 +486,7 @@ func main() {
 	listSuites(arr[6], outputArr)
 	listTests(arr[7], outputArr)
 	listKeyWords(arr[8], outputArr, 0)
+
+	// Display profiling results if enabled
+	displayProfilingResults()
 }
